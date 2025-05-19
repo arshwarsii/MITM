@@ -1,0 +1,456 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Data Intercept Simulation</title>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/bootstrap/5.3.0/css/bootstrap.min.css" rel="stylesheet">
+    <style>
+        body {
+            padding-top: 20px;
+            background-color: #f7f7f7;
+        }
+        .network-packet {
+            border-radius: 5px;
+            margin-bottom: 10px;
+            padding: 10px;
+            background-color: #fff;
+            border-left: 4px solid #6c757d;
+            transition: all 0.3s;
+        }
+        .network-packet:hover {
+            box-shadow: 0 0 10px rgba(0,0,0,0.1);
+        }
+        .protocol-http {
+            border-left-color: #dc3545;
+        }
+        .protocol-https {
+            border-left-color: #28a745;
+        }
+        .packet-intercepted {
+            background-color: #ffe6e6;
+            border-left-color: #dc3545;
+        }
+        .attack-animation {
+            position: relative;
+            height: 100px;
+            margin: 20px 0;
+            border: 1px dashed #ccc;
+            border-radius: 5px;
+            overflow: hidden;
+        }
+        .packet {
+            position: absolute;
+            width: 30px;
+            height: 30px;
+            background-color: #28a745;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-weight: bold;
+            animation: movePacket 3s linear;
+        }
+        .http-packet {
+            background-color: #dc3545;
+        }
+        .https-packet {
+            background-color: #28a745;
+        }
+        .attacker {
+            position: absolute;
+            width: 40px;
+            height: 40px;
+            background-color: #dc3545;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-weight: bold;
+            top: 30px;
+            left: 50%;
+            transform: translateX(-50%);
+            z-index: 10;
+        }
+        @keyframes movePacket {
+            0% { left: 0; top: 35px; }
+            100% { left: calc(100% - 30px); top: 35px; }
+        }
+        .card {
+            margin-bottom: 20px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .card-header {
+            font-weight: bold;
+        }
+        .badge-http {
+            background-color: #dc3545;
+            color: white;
+        }
+        .badge-https {
+            background-color: #28a745;
+            color: white;
+        }
+        .content-section {
+            margin-bottom: 30px;
+        }
+        #infoTab {
+            height: 400px;
+            overflow-y: auto;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1 class="text-center mb-4">Man-in-the-Middle (MITM) Attack Simulation</h1>
+        
+        <div class="row">
+            <div class="col-md-8">
+                <div class="card">
+                    <div class="card-header bg-primary text-white">
+                        Simulation Controls
+                    </div>
+                    <div class="card-body">
+                        <div class="mb-3">
+                            <h5>Send a message between users:</h5>
+                            <div class="input-group mb-3">
+                                <select class="form-select" id="sender">
+                                    <option value="Alice">Alice</option>
+                                    <option value="Bob">Bob</option>
+                                </select>
+                                <span class="input-group-text">to</span>
+                                <select class="form-select" id="receiver">
+                                    <option value="Bob">Bob</option>
+                                    <option value="Alice">Alice</option>
+                                </select>
+                            </div>
+                            <div class="input-group mb-3">
+                                <input type="text" class="form-control" id="message" placeholder="Type your message">
+                                <div class="input-group-text">
+                                    <div class="form-check form-switch">
+                                        <input class="form-check-input" type="checkbox" id="useEncryption">
+                                        <label class="form-check-label" for="useEncryption">Use HTTPS</label>
+                                    </div>
+                                </div>
+                                <button class="btn btn-primary" id="sendBtn">Send</button>
+                            </div>
+                        </div>
+                        
+                        <div class="attack-animation">
+                            <div class="attacker">🕵️</div>
+                            <!-- Packets will be added here via JavaScript -->
+                        </div>
+                        
+                        <button class="btn btn-secondary" id="resetBtn">Reset Simulation</button>
+                    </div>
+                </div>
+                
+                <div class="card">
+                    <div class="card-header">
+                        <ul class="nav nav-tabs card-header-tabs" id="myTab" role="tablist">
+                            <li class="nav-item" role="presentation">
+                                <button class="nav-link active" id="network-tab" data-bs-toggle="tab" data-bs-target="#network" type="button" role="tab" aria-controls="network" aria-selected="true">Network Traffic</button>
+                            </li>
+                            <li class="nav-item" role="presentation">
+                                <button class="nav-link" id="intercepted-tab" data-bs-toggle="tab" data-bs-target="#intercepted" type="button" role="tab" aria-controls="intercepted" aria-selected="false">Intercepted Data</button>
+                            </li>
+                            <li class="nav-item" role="presentation">
+                                <button class="nav-link" id="info-tab" data-bs-toggle="tab" data-bs-target="#info" type="button" role="tab" aria-controls="info" aria-selected="false">MITM Info</button>
+                            </li>
+                        </ul>
+                    </div>
+                    <div class="card-body">
+                        <div class="tab-content" id="myTabContent">
+                            <div class="tab-pane fade show active" id="network" role="tabpanel" aria-labelledby="network-tab">
+                                <div id="networkTraffic"></div>
+                            </div>
+                            <div class="tab-pane fade" id="intercepted" role="tabpanel" aria-labelledby="intercepted-tab">
+                                <div id="interceptedData"></div>
+                            </div>
+                            <div class="tab-pane fade" id="info" role="tabpanel" aria-labelledby="info-tab">
+                                <div id="infoTab">
+                                    <h4>What is a Man-in-the-Middle Attack?</h4>
+                                    <p>A Man-in-the-Middle (MITM) attack is a type of cybersecurity attack where an attacker secretly intercepts communications between two parties who believe they are directly communicating with each other.</p>
+                                    
+                                    <h4>How MITM Attacks Work</h4>
+                                    <ol>
+                                        <li><strong>Interception</strong>: The attacker positions themselves between the victim and the legitimate service.</li>
+                                        <li><strong>Eavesdropping</strong>: The attacker can passively listen to communications.</li>
+                                        <li><strong>Manipulation</strong>: The attacker can modify data as it passes through them.</li>
+                                    </ol>
+                                    
+                                    <h4>Common MITM Attack Methods</h4>
+                                    <ul>
+                                        <li><strong>ARP Spoofing</strong>: Falsifying ARP messages to link the attacker's MAC address with a legitimate IP address.</li>
+                                        <li><strong>DNS Spoofing</strong>: Modifying DNS records to redirect traffic to malicious websites.</li>
+                                        <li><strong>WiFi Eavesdropping</strong>: Setting up rogue WiFi access points to intercept traffic.</li>
+                                    </ul>
+                                    
+                                    <h4>How HTTPS Prevents MITM Attacks</h4>
+                                    <p>HTTPS adds encryption and authentication to HTTP:</p>
+                                    <ul>
+                                        <li><strong>Encryption</strong>: Data is encrypted using TLS/SSL, making it unreadable even if intercepted.</li>
+                                        <li><strong>Authentication</strong>: Digital certificates verify the identity of the server.</li>
+                                        <li><strong>Integrity</strong>: HTTPS ensures data hasn't been modified in transit.</li>
+                                    </ul>
+                                    
+                                    <h4>In This Simulation</h4>
+                                    <p>This simulation demonstrates:</p>
+                                    <ul>
+                                        <li>How unencrypted HTTP traffic can be easily intercepted</li>
+                                        <li>How HTTPS (encrypted) traffic protects against interception</li>
+                                        <li>The difference in security between the two protocols</li>
+                                    </ul>
+                                    
+                                    <div class="alert alert-warning">
+                                        <strong>Educational Purpose Only:</strong> This simulation is for educational purposes only. Performing actual MITM attacks without authorization is illegal and unethical.
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="col-md-4">
+                <div class="card">
+                    <div class="card-header bg-success text-white">
+                        Security Statistics
+                    </div>
+                    <div class="card-body">
+                        <div class="mb-3">
+                            <h5>Protocol Comparison</h5>
+                            <table class="table table-sm">
+                                <thead>
+                                    <tr>
+                                        <th>Protocol</th>
+                                        <th>Messages</th>
+                                        <th>Intercepted</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <tr>
+                                        <td><span class="badge badge-http">HTTP</span></td>
+                                        <td id="httpCount">0</td>
+                                        <td id="httpIntercepted">0</td>
+                                    </tr>
+                                    <tr>
+                                        <td><span class="badge badge-https">HTTPS</span></td>
+                                        <td id="httpsCount">0</td>
+                                        <td id="httpsIntercepted">0</td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                        
+                        <div class="mb-3">
+                            <h5>Security Recommendations</h5>
+                            <ul class="list-group">
+                                <li class="list-group-item">Always use HTTPS for sensitive communications</li>
+                                <li class="list-group-item">Verify website certificates before sharing data</li>
+                                <li class="list-group-item">Avoid using public WiFi for sensitive transactions</li>
+                                <li class="list-group-item">Use a VPN for additional security</li>
+                            </ul>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/bootstrap/5.3.0/js/bootstrap.bundle.min.js"></script>
+    <script>
+        // Helper function to sanitize input
+        function sanitizeHTML(text) {
+            const element = document.createElement('div');
+            element.textContent = text;
+            return element.innerHTML;
+        }
+        
+        // Function to update network traffic display
+        function updateNetworkTraffic() {
+            fetch('/get_network_data')
+                .then(response => response.json())
+                .then(data => {
+                    const container = document.getElementById('networkTraffic');
+                    container.innerHTML = '';
+                    
+                    if (data.length === 0) {
+                        container.innerHTML = '<p class="text-muted">No network traffic yet.</p>';
+                        return;
+                    }
+                    
+                    // Update statistics
+                    let httpCount = 0;
+                    let httpsCount = 0;
+                    
+                    data.forEach(packet => {
+                        if (packet.protocol === 'HTTP') {
+                            httpCount++;
+                        } else {
+                            httpsCount++;
+                        }
+                        
+                        const packetDiv = document.createElement('div');
+                        packetDiv.className = `network-packet protocol-${packet.protocol.toLowerCase()}`;
+                        
+                        let dataDisplay = packet.data;
+                        let decryptedInfo = '';
+                        
+                        // Show decrypted data if encrypted
+                        if (packet.encrypted) {
+                            decryptedInfo = `<br><small class="text-success">
+                                <i class="bi bi-lock-fill"></i> Encrypted data - only sender and receiver can read
+                            </small>`;
+                        }
+                        
+                        packetDiv.innerHTML = `
+                            <div class="d-flex justify-content-between">
+                                <span><strong>${sanitizeHTML(packet.sender)}</strong> to <strong>${sanitizeHTML(packet.receiver)}</strong></span>
+                                <span class="badge ${packet.protocol === 'HTTP' ? 'badge-http' : 'badge-https'}">${packet.protocol}</span>
+                            </div>
+                            <div class="mt-1">
+                                <div><small class="text-muted">Packet ID: ${packet.id} | Time: ${packet.timestamp}</small></div>
+                                <div class="mt-2 p-2 bg-light rounded">
+                                    Data: ${sanitizeHTML(packet.data)}
+                                    ${decryptedInfo}
+                                </div>
+                            </div>
+                        `;
+                        
+                        container.appendChild(packetDiv);
+                    });
+                    
+                    // Update statistics
+                    document.getElementById('httpCount').textContent = httpCount;
+                    document.getElementById('httpsCount').textContent = httpsCount;
+                });
+        }
+        
+        // Function to update intercepted data display
+        function updateInterceptedData() {
+            fetch('/get_intercepted_data')
+                .then(response => response.json())
+                .then(data => {
+                    const container = document.getElementById('interceptedData');
+                    container.innerHTML = '';
+                    
+                    if (data.length === 0) {
+                        container.innerHTML = '<p class="text-muted">No intercepted data yet.</p>';
+                        return;
+                    }
+                    
+                    // Update statistics
+                    let httpIntercepted = data.length;
+                    document.getElementById('httpIntercepted').textContent = httpIntercepted;
+                    document.getElementById('httpsIntercepted').textContent = '0';
+                    
+                    data.forEach(packet => {
+                        const packetDiv = document.createElement('div');
+                        packetDiv.className = 'network-packet packet-intercepted';
+                        
+                        packetDiv.innerHTML = `
+                            <div class="d-flex justify-content-between">
+                                <span><strong>${sanitizeHTML(packet.sender)}</strong> to <strong>${sanitizeHTML(packet.receiver)}</strong></span>
+                                <span class="badge badge-http">INTERCEPTED</span>
+                            </div>
+                            <div class="mt-1">
+                                <div><small class="text-muted">Packet ID: ${packet.id} | Time: ${packet.timestamp}</small></div>
+                                <div class="mt-2 p-2 bg-light rounded">
+                                    Intercepted Data: ${sanitizeHTML(packet.data)}
+                                </div>
+                            </div>
+                        `;
+                        
+                        container.appendChild(packetDiv);
+                    });
+                });
+        }
+        
+        // Function to animate packet movement
+        function animatePacket(isEncrypted) {
+            const container = document.querySelector('.attack-animation');
+            const packet = document.createElement('div');
+            packet.className = `packet ${isEncrypted ? 'https-packet' : 'http-packet'}`;
+            packet.innerHTML = isEncrypted ? '🔒' : '📨';
+            
+            container.appendChild(packet);
+            
+            // Remove the packet after animation completes
+            setTimeout(() => {
+                packet.remove();
+            }, 3000);
+        }
+        
+        // Event listener for send button
+        document.getElementById('sendBtn').addEventListener('click', function() {
+            const sender = document.getElementById('sender').value;
+            const receiver = document.getElementById('receiver').value;
+            const message = document.getElementById('message').value;
+            const useEncryption = document.getElementById('useEncryption').checked;
+            
+            if (!message.trim()) {
+                alert('Please enter a message');
+                return;
+            }
+            
+            // Send the message
+            fetch('/send_message', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    sender: sender,
+                    receiver: receiver,
+                    message: message,
+                    encryption: useEncryption
+                }),
+            })
+            .then(response => response.json())
+            .then(data => {
+                // Animate packet movement
+                animatePacket(useEncryption);
+                
+                // Clear message input
+                document.getElementById('message').value = '';
+                
+                // Update displays
+                updateNetworkTraffic();
+                updateInterceptedData();
+            });
+        });
+        
+        // Event listener for reset button
+        document.getElementById('resetBtn').addEventListener('click', function() {
+            fetch('/reset_simulation', {
+                method: 'POST',
+            })
+            .then(response => response.json())
+            .then(data => {
+                // Update displays
+                updateNetworkTraffic();
+                updateInterceptedData();
+                
+                // Reset statistics
+                document.getElementById('httpCount').textContent = '0';
+                document.getElementById('httpsCount').textContent = '0';
+                document.getElementById('httpIntercepted').textContent = '0';
+                document.getElementById('httpsIntercepted').textContent = '0';
+            });
+        });
+        
+        // Automatically update displays every few seconds
+        setInterval(function() {
+            updateNetworkTraffic();
+            updateInterceptedData();
+        }, 3000);
+        
+        // Initial update
+        updateNetworkTraffic();
+        updateInterceptedData();
+    </script>
+</body>
+</html>
